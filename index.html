@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#00E5FF" />
+  <meta name="description" content="IIA – Intelligent Image Analyzer. Analiza metadatos EXIF, OCR, huellas digitales y genera reportes forenses de cualquier imagen." />
+  <title>IIA – Intelligent Image Analyzer</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A0C10'/%3E%3Ctext x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='14' fill='%2300E5FF'%3EIIA%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/css/styles.css" />
+
+  <!-- CDN Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.2/spark-md5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+
+<body>
+
+  <!-- Install banner -->
+  <div id="installBanner" class="install-banner" role="banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Instala IIA como app —
+    <a id="installLink" class="install-link" role="button">Instalar ahora</a>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <a class="header-logo" href="/">
+      <span class="logo-badge">IIA</span>
+      <span class="logo-name">Intelligent <span>Image Analyzer</span></span>
+    </a>
+    <div class="header-actions">
+      <span id="statusDot" class="status-dot" title="Estado del analizador"></span>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <main class="main-layout">
+
+    <!-- ── Left Panel ── -->
+    <aside class="panel-left" aria-label="Panel de carga de imagen">
+
+      <!-- Drop zone -->
+      <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Área de carga de imagen">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="m21 15-5-5L5 21"/>
+        </svg>
+        <p class="drop-title">Arrastra una imagen aquí</p>
+        <p class="drop-subtitle">JPEG, PNG, TIFF, WEBP, HEIC y más</p>
+        <button id="pickBtn" class="drop-btn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Elegir archivo
+        </button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" aria-hidden="true" />
+      </div>
+
+      <!-- Preview -->
+      <div id="previewContainer" class="preview-container" aria-live="polite">
+        <div id="previewFrame" class="preview-frame">
+          <img id="previewImage" class="preview-image" alt="Vista previa de la imagen cargada" />
+          <div class="scan-line" aria-hidden="true"></div>
+          <div class="scan-overlay" aria-hidden="true"></div>
+        </div>
+
+        <div class="preview-meta">
+          <div class="meta-chip">
+            <div class="meta-chip-label">Nombre</div>
+            <div class="meta-chip-value" id="chipName">—</div>
+          </div>
+          <div class="meta-chip">
+            <div class="meta-chip-label">Tamaño</div>
+            <div class="meta-chip-value" id="chipSize">—</div>
+          </div>
+          <div class="meta-chip">
+            <div class="meta-chip-label">Tipo</div>
+            <div class="meta-chip-value" id="chipType">—</div>
+          </div>
+          <div class="meta-chip">
+            <div class="meta-chip-label">Dimensiones</div>
+            <div class="meta-chip-value" id="chipDims">—</div>
+          </div>
+        </div>
+
+        <!-- OCR progress (inside preview area) -->
+        <div id="ocrProgress" class="progress-container">
+          <div class="progress-label">
+            <span>Reconociendo texto (OCR)…</span>
+            <span id="ocrProgressPct">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div id="ocrProgressFill" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <button id="analyzeBtn" class="analyze-btn" disabled type="button">
+          <div class="spinner" aria-hidden="true"></div>
+          <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span class="btn-text">Analizar imagen</span>
+        </button>
+
+        <button id="clearBtn" class="clear-btn" type="button">Limpiar y cargar otra imagen</button>
+      </div>
+
+    </aside>
+
+    <!-- ── Right Panel ── -->
+    <section class="panel-right" aria-label="Resultados del análisis">
+
+      <!-- Empty state -->
+      <div id="emptyState" class="empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <circle cx="8" cy="9" r="2"/>
+          <path d="m22 17-5-5-3 3-2-2-5 5"/>
+          <path d="M8 21h8"/>
+          <path d="M12 17v4"/>
+        </svg>
+        <h2 class="empty-title">Carga una imagen para comenzar</h2>
+        <p class="empty-desc">IIA extrae y analiza toda la información disponible en tu imagen de forma automática y no invasiva.</p>
+        <div class="empty-features">
+          <span class="empty-tag">EXIF · IPTC · XMP</span>
+          <span class="empty-tag">GPS</span>
+          <span class="empty-tag">OCR</span>
+          <span class="empty-tag">MD5 · SHA-1 · SHA-256</span>
+          <span class="empty-tag">Reporte inteligente</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="resultsContainer" class="results-container" aria-live="polite">
+
+        <!-- Report summary -->
+        <div class="report-summary">
+          <div class="report-label">▸ Reporte inteligente</div>
+          <div class="report-title">Análisis completo</div>
+          <p class="report-text" id="reportSummaryText"></p>
+          <div class="report-stats">
+            <div class="report-stat">
+              <span class="stat-num" id="statFields">0</span>
+              <span class="stat-label">Campos</span>
+            </div>
+            <div class="report-stat">
+              <span class="stat-num" id="statSections">0</span>
+              <span class="stat-label">Secciones</span>
+            </div>
+            <div class="report-stat">
+              <span class="stat-num" id="statFindings">0</span>
+              <span class="stat-label">Hallazgos</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- EXIF Section -->
+        <div class="section-card" id="exifSection">
+          <div class="section-header" role="button" tabindex="0" aria-expanded="true">
+            <div class="section-header-left">
+              <div class="section-icon cyan">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="m21 15-5-5L5 21"/>
+                </svg>
+              </div>
+              <span class="section-title">Metadatos EXIF / TIFF</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="section-badge" id="exifBadge">—</span>
+              <svg class="section-toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="section-body" id="exifBody"></div>
+        </div>
+
+        <!-- GPS Section -->
+        <div class="section-card" id="gpsSection">
+          <div class="section-header" role="button" tabindex="0" aria-expanded="true">
+            <div class="section-header-left">
+              <div class="section-icon indigo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                  <circle cx="12" cy="10" r="3"/>
+                </svg>
+              </div>
+              <span class="section-title">Coordenadas GPS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="section-badge" id="gpsBadge">—</span>
+              <svg class="section-toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="section-body" id="gpsBody"></div>
+        </div>
+
+        <!-- IPTC Section -->
+        <div class="section-card" id="iptcSection">
+          <div class="section-header" role="button" tabindex="0" aria-expanded="true">
+            <div class="section-header-left">
+              <div class="section-icon green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </div>
+              <span class="section-title">Metadatos IPTC</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="section-badge" id="iptcBadge">—</span>
+              <svg class="section-toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="section-body" id="iptcBody"></div>
+        </div>
+
+        <!-- XMP Section -->
+        <div class="section-card" id="xmpSection">
+          <div class="section-header" role="button" tabindex="0" aria-expanded="true">
+            <div class="section-header-left">
+              <div class="section-icon amber">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="16 18 22 12 16 6"/>
+                  <polyline points="8 6 2 12 8 18"/>
+                </svg>
+              </div>
+              <span class="section-title">Datos XMP</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="section-badge" id="xmpBadge">—</span>
+              <svg class="section-toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="section-body" id="xmpBody"></div>
+        </div>
+
+        <!-- OCR Section -->
+        <div class="section-card" id="ocrSection">
+          <div class="section-header" role="button" tabindex="0" aria-expanded="true">
+            <div class="section-header-left">
+              <div class="section-icon cyan">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>
+                </svg>
+              </div>
+              <span class="section-title">OCR – Texto reconocido</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="section-badge" id="ocrBadge">—</span>
+              <svg class="section-toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="section-body" id="ocrBody"></div>
+        </div>
+
+        <!-- Hashes Section -->
+        <div class="section-card" id="hashSection">
+          <div class="section-header" role="button" tabindex="0" aria-expanded="true">
+            <div class="section-header-left">
+              <div class="section-icon indigo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
+                  <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+                </svg>
+              </div>
+              <span class="section-title">Huellas digitales</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="section-badge" id="hashBadge">—</span>
+              <svg class="section-toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="section-body" id="hashBody"></div>
+        </div>
+
+      </div><!-- /results-container -->
+
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="alert" aria-live="assertive">
+    <span class="toast-icon"></span>
+    <span id="toastMsg"></span>
+  </div>
+
+  <!-- App module -->
+  <script type="module" src="/js/app.js"></script>
+
+  <!-- Keyboard nav for section headers -->
+  <script>
+    document.querySelectorAll('.section-header').forEach(header => {
+      header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          header.click();
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
